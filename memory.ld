@@ -1,4 +1,4 @@
-OUTPUT_FORMAT ("elf32-littlearm", "elf32-bigarm", "elf32-littlearm")
+ENTRY(Reset_Handler)
 
 /* Internal Memory Map*/
 MEMORY
@@ -10,7 +10,7 @@ MEMORY
 
 /* Section Definitions */ 
 SECTIONS 
-{	
+{
 	/* external SDRAM */
 	.sdram (NOLOAD) :
 	{
@@ -23,48 +23,73 @@ SECTIONS
 		bin/chocdoom/r_plane.o(COMMON)
 	} > sdram
 	
-	/* program code */
-	.text : 
-	{ 
-		KEEP(*(.isr_vector .isr_vector.*)) 
-		*(.text .text.* .gnu.linkonce.t.*) 		  
-		*(.glue_7t) *(.glue_7)						
-		*(.rodata .rodata* .gnu.linkonce.r.*)								  
+	.isr_vector :
+	{
+		. = ALIGN(4);
+		KEEP(*(.isr_vector))
+		. = ALIGN(4);
 	} > rom
 	
-	.ARM.extab : 
+	/* program code */
+	.text : 
 	{
-		*(.ARM.extab* .gnu.linkonce.armextab.*)
+		. = ALIGN(4);
+		*(.text)
+		*(.text*)
+		*(.gnu.linkonce.t.*)
+		*(.glue_7)
+		*(.glue_7t)
+		*(.eh_frame)
+		KEEP(*(.init))
+		KEEP(*(.fini))
+		. = ALIGN(4);
+		_etext = .;
 	} > rom
 
-	__exidx_start = .;
-	.ARM.exidx :
+	.rodata :
 	{
-		*(.ARM.exidx* .gnu.linkonce.armexidx.*)
+		. = ALIGN(4);
+		*(.rodata)
+		*(.rodata*)
+		*(.gnu.linkonce.r.*)
+		. = ALIGN(4);
 	} > rom
-	__exidx_end = .;
+	
+	.ARM.extab : { *(.ARM.extab* .gnu.linkonce.armextab.*) } > rom
 
-	. = ALIGN(4); 
+	.ARM : {
+		__exidx_start = .;
+		*(.ARM.exidx*)
+		*(.gnu.linkonce.armexidx.*)
+		__exidx_end = .;
+	} > rom
+	
+	/*. = ALIGN(4);
 	_etext = .;
-	_sidata = .; 
+	_sidata = .;*/
 
+	_sidata = LOADADDR(.data);
+	
 	/* initialized data */
-	.data : AT (_etext) 
+	.data : /* AT (_etext) */
 	{
-		_sdata = .; 
-		*(.data .data.*) 
-		. = ALIGN(4); 
+		. = ALIGN(4);
+		_sdata = .;
+		*(.data)
+		*(.data*)
+		. = ALIGN(4);
 		_edata = . ;
-	} > ram
+	} > ram AT> rom
 
 	/* uninitialized data */
 	.bss (NOLOAD) : 
 	{
-		_sbss = . ; 
-		*(.bss .bss.*) 
-		*(COMMON) 
-		. = ALIGN(4); 
-		_ebss = . ; 
+		_sbss = . ;
+		*(.bss)
+		*(.bss*)
+		*(COMMON)
+		. = ALIGN(4);
+		_ebss = . ;
 	} > ram
 	
 	/* stack section */
@@ -82,4 +107,4 @@ SECTIONS
 	
 	. = ALIGN(4); 
 	_end = . ;
-}
+}

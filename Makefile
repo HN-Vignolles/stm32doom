@@ -21,11 +21,29 @@ SRC      = $(SRC_MAIN) $(addprefix $(DOOMDIR)/,$(SRC_DOOM))
 
 DEFINES  = -DDEBUG_ -DSTM32F4XX -DUSE_STDPERIPH_DRIVER -DSTM32F429_439xx
 
-CC       = arm-none-eabi-gcc
-BIN      = arm-none-eabi-objcopy
-OBJDUMP  = arm-none-eabi-objdump
-SIZE     = arm-none-eabi-size
-CFLAGS   = -mthumb -mtune=cortex-m4 -march=armv7e-m -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -Wall $(DEFINES) -g -I $(SRCDIR) -I $(SRCDIR)/$(DOOMDIR) -I $(LIBDIR)/stm32 -I $(LIBDIR)/usb -I $(LIBDIR)/fatfs -O2 -c
+
+GCCP = /path/to/arm-none-eabi/
+GCCR = $(GCCP)/bin
+IPATH = -I$(GCCP)/arm-none-eabi/include \
+	-I$(GCCP)/lib/gcc/arm-none-eabi/7.3.1/include \
+	-I$(GCCP)/lib/gcc/arm-none-eabi/7.3.1/include-fixed \
+	-I $(SRCDIR) \
+	-I $(SRCDIR)/$(DOOMDIR) \
+	-I $(LIBDIR)/stm32 \
+	-I $(LIBDIR)/usb \
+	-I $(LIBDIR)/fatfs
+
+PREFIX = arm-none-eabi-
+CC = $(GCCR)/$(PREFIX)gcc
+BIN = $(GCCR)/$(PREFIX)objcopy 
+LD = $(GCCR)/$(PREFIX)ld
+AR = $(GCCR)/$(PREFIX)ar
+SIZE = $(GCCR)/$(PREFIX)size
+READELF = $(GCCR)/$(PREFIX)readelf
+OBJDUMP = $(GCCR)/$(PREFIX)objdump
+
+
+CFLAGS   = -mthumb -mtune=cortex-m4 -march=armv7e-m -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -Wall $(DEFINES) -g $(IPATH) -O2 -c
 LDFLAGS  = -mthumb -mtune=cortex-m4 -march=armv7e-m -mfloat-abi=hard -mfpu=fpv4-sp-d16 -mlittle-endian -lm -nostartfiles -T$(LDSCRIPT) -Wl,-Map=$(BINDIR)/$(TARGET).map
 
 OBJS     = $(addprefix $(SRCDIR)/, $(SRC:.c=.o)) $(addprefix $(LIBDIR)/, $(LIB:.c=.o))
@@ -38,7 +56,7 @@ DUMMY:=$(shell if ! [ -d $(BINDIR)/stm32 ]; then mkdir $(BINDIR)/stm32; fi)
 DUMMY:=$(shell if ! [ -d $(BINDIR)/usb ]; then mkdir $(BINDIR)/usb; fi)
 DUMMY:=$(shell if ! [ -d $(BINDIR)/fatfs ]; then mkdir $(BINDIR)/fatfs; fi)
 
-all: elf hex bin lss size
+all: elf hex bin lss size objd relf
 
 elf: $(BINDIR)/$(TARGET).elf
 hex: $(BINDIR)/$(TARGET).hex
@@ -69,16 +87,30 @@ $(BINDIR)/%.o: $(LIBDIR)/%.c
 	@echo "compiling $< ..."
 	$(CC) $(CFLAGS) $< -o $@
 
-	
 phony: flash clean size
 
 flash: all
 	@echo "flashing ..."
-	$(shell) st-link_cli -c SWD -P '$(BINDIR)/$(TARGET).bin' 0x08000000 -Rst
+	/usr/bin/openocd \
+	-f /usr/share/openocd/scripts/interface/stlink-v2-1.cfg \
+	-f /usr/share/openocd/scripts/target/stm32f4x.cfg \
+	-c "init" \
+	-c "reset init" \
+	-c "flash probe 0" \
+	-c "flash info 0" \
+	-c "flash write_image erase $(BINDIR)/$(TARGET).bin 0x08000000" \
+	-c "reset run" -c shutdown
 	
 clean:
 	@echo "cleaning up ..."
 	@rm -r $(BINDIR)/*
 
 size: elf
-	$(SIZE) --format=sysv -d $(BINDIR)/$(TARGET).elf
+	$(SIZE) --format=sysv -x $(BINDIR)/$(TARGET).elf
+
+objd: elf
+	$(OBJDUMP) -d $(BINDIR)/$(TARGET).elf > $(BINDIR)/$(TARGET).objdump.txt
+lobjd: elf
+	$(OBJDUMP) -D $(BINDIR)/$(TARGET).elf > $(BINDIR)/$(TARGET).Lobjdump.txt
+relf: elf
+	$(READELF) -a $(BINDIR)/$(TARGET).elf > $(BINDIR)/$(TARGET).readelf.txt
